@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -15,9 +15,25 @@ app = FastAPI()
 
 
 @app.on_event("startup")
+
 async def startup_event():
     print("Server running and connected to Supabase")
 
+
+async def verify_token(request: Request):
+    auth_header = request.headers.get("Authorization")
+
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Access token required")
+
+    token = auth_header.split(" ")[1]
+
+    try:
+        user_response = supabase.auth.get_user(token)
+        return user_response.user, token
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
 
 @app.post("/auth/signup")
 async def signup(request: Request):
@@ -68,21 +84,28 @@ async def public_info():
 
 
 @app.get("/protected/profile")
-async def protected_profile(request: Request):
-    auth_header = request.headers.get("Authorization")
+async def protected_profile(user_and_token: tuple = Depends(verify_token)):
+    user, token = user_and_token
+    return {
+        "id": user.id,
+        "email": user.email,
+        "created_at": str(user.created_at)
+    }
 
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return JSONResponse(status_code=401, content={"error": "Access token required"})
+@app.get("/protected/dashboard")
+async def protected_dashboard(user_and_token: tuple = Depends(verify_token)):
+    user, token = user_and_token
+    return {
+        "message": f"Welcome to your dashboard, {user.email}"
+    }
 
-    token = auth_header.split(" ")[1]
+
+@app.post("/auth/logout")
+async def logout(user_and_token: tuple = Depends(verify_token)):
+    user, token = user_and_token
 
     try:
-        user_response = supabase.auth.get_user(token)
-        user = user_response.user
-        return {
-            "id": user.id,
-            "email": user.email,
-            "created_at": str(user.created_at)
-        }
-    except Exception:
-        return JSONResponse(status_code=401, content={"error": "Invalid or expired token"})
+        supabase.auth.sign_out()
+        return JSONResponse(status_code=204, content=None)
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})

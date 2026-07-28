@@ -61,3 +61,19 @@ async def login(request: Request):
         })
     except Exception as e:
         return JSONResponse(status_code=401, content={"error": "Invalid login credentials"})
+
+@app.get("/public/info")
+async def public_info():
+    return {"message": "Welcome stranger! This info is public."}
+
+
+@app.get("/protected/profile")
+async def protected_profile(request: Request):
+    auth_header = request.headers.get("Authorization")
+
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"error": "Access token required"})
+
+    token = auth_header.split(" ")[1]
+
+    return {"message": "Token received, verification comes in Stage 3", "token_preview": token[:20]}

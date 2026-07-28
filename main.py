@@ -76,4 +76,13 @@ async def protected_profile(request: Request):
 
     token = auth_header.split(" ")[1]
 
-    return {"message": "Token received, verification comes in Stage 3", "token_preview": token[:20]}
+    try:
+        user_response = supabase.auth.get_user(token)
+        user = user_response.user
+        return {
+            "id": user.id,
+            "email": user.email,
+            "created_at": str(user.created_at)
+        }
+    except Exception:
+        return JSONResponse(status_code=401, content={"error": "Invalid or expired token"})

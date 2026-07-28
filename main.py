@@ -40,3 +40,24 @@ async def signup(request: Request):
         })
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
+
+@app.post("/auth/login")
+async def login(request: Request):
+    body = await request.json()
+    email = body.get("email")
+    password = body.get("password")
+
+    if not email or not password:
+        return JSONResponse(status_code=400, content={"error": "Email and password are required"})
+
+    try:
+        result = supabase.auth.sign_in_with_password({
+            "email": email,
+            "password": password
+        })
+        return JSONResponse(status_code=200, content={
+            "access_token": result.session.access_token,
+            "refresh_token": result.session.refresh_token
+        })
+    except Exception as e:
+        return JSONResponse(status_code=401, content={"error": "Invalid login credentials"})

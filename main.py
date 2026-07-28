@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -13,27 +14,26 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
 
+security = HTTPBearer(auto_error=False)
+
 
 @app.on_event("startup")
-
 async def startup_event():
     print("Server running and connected to Supabase")
 
 
-async def verify_token(request: Request):
-    auth_header = request.headers.get("Authorization")
-
-    if not auth_header or not auth_header.startswith("Bearer "):
+async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if credentials is None:
         raise HTTPException(status_code=401, detail="Access token required")
 
-    token = auth_header.split(" ")[1]
+    token = credentials.credentials
 
     try:
         user_response = supabase.auth.get_user(token)
         return user_response.user, token
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
+
 
 @app.post("/auth/signup")
 async def signup(request: Request):
@@ -57,6 +57,7 @@ async def signup(request: Request):
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
 
+
 @app.post("/auth/login")
 async def login(request: Request):
     body = await request.json()
@@ -78,6 +79,7 @@ async def login(request: Request):
     except Exception as e:
         return JSONResponse(status_code=401, content={"error": "Invalid login credentials"})
 
+
 @app.get("/public/info")
 async def public_info():
     return {"message": "Welcome stranger! This info is public."}
@@ -91,6 +93,7 @@ async def protected_profile(user_and_token: tuple = Depends(verify_token)):
         "email": user.email,
         "created_at": str(user.created_at)
     }
+
 
 @app.get("/protected/dashboard")
 async def protected_dashboard(user_and_token: tuple = Depends(verify_token)):
